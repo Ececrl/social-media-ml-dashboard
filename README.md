@@ -51,3 +51,8 @@ Initial models were significantly improved through advanced Feature Engineering:
    ```bash
    git clone [https://github.com/Ececrl/social-media-ml-dashboard.git](https://github.com/Ececrl/social-media-ml-dashboard.git)
    cd social-media-ml-dashboard
+   ---
+
+## 📂 Data Source
+
+The dataset used in this project was obtained from **[Kaggle](https://www.kaggle.com/)**. It contains social media metrics, engagement indicators, and text sentiment categories used for training and evaluating the machine learning models.
