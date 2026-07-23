@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # ==========================================
-# 1. SAYFA YAPILANDIRMASI VE TEMA
+# 1. SAYFA YAPILANDIRMASI
 # ==========================================
 st.set_page_config(
     page_title="Sosyal Medya BI & ML Analiz Paneli",
@@ -12,35 +12,19 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Özel CSS Tasarımı (unsafe_allow_html=True olarak düzeltildi)
-st.markdown("""
-    <style>
-    .main { padding: 1.5rem; }
-    .stMetric {
-        background-color: #f8f9fa;
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .stAlert { border-radius: 8px; }
-    </style>
-""", unsafe_allow_html=True)
-
 
 # ==========================================
 # 2. VERİ YÜKLEME VE ÖN İŞLEME
 # ==========================================
 @st.cache_data
 def load_data():
-    # İşlenmiş zaman serisi verisini yükle
     df = pd.read_csv("zaman_entegreli_veri.csv")
     
-    # Tarih sütununu datetime formatına çevir
     if 'posted_datetime' in df.columns:
         df['posted_datetime'] = pd.to_datetime(df['posted_datetime'])
         df = df.sort_values('posted_datetime')
     
-    # Ghost Day (Sıfır etkileşimli/eksik veri) ve NaN Temizliği
+    # Ghost Day ve NaN temizliği
     df_clean = df.dropna().copy()
     if 'engagement_score' in df_clean.columns:
         df_clean = df_clean[df_clean['engagement_score'] > 0]
@@ -59,9 +43,8 @@ except Exception as e:
 # ==========================================
 st.sidebar.image("https://img.icons8.com/color/96/dashboard.png", width=80)
 st.sidebar.title("📌 Kontrol Paneli")
-st.sidebar.markdown("---")
+st.sidebar.divider()
 
-# Tarih Aralığı Filtresi
 if 'posted_datetime' in df.columns:
     min_date = df['posted_datetime'].min().date()
     max_date = df['posted_datetime'].max().date()
@@ -82,7 +65,7 @@ if 'posted_datetime' in df.columns:
 else:
     filtered_df = df.copy()
 
-st.sidebar.markdown("---")
+st.sidebar.divider()
 st.sidebar.info(f"🟢 **Aktif Veri Sayısı:** {len(filtered_df)} Gün")
 
 
@@ -111,7 +94,7 @@ with col4:
     sentiment_label = "Pozitif" if avg_sentiment > 0.05 else ("Negatif" if avg_sentiment < -0.05 else "Nötr")
     st.metric("🎭 Ort. Duygu Skoru", f"{avg_sentiment:.2f}", delta=sentiment_label)
 
-st.markdown("---")
+st.divider()
 
 
 # ==========================================
@@ -165,7 +148,6 @@ with tab3:
         estimated_score = (input_rolling * 0.45) + (input_lag1 * 0.30) + (input_lag2 * 0.20) + (input_sentiment * 0.05)
         estimated_score = max(0.0, min(1.0, estimated_score))
 
-        st.markdown("<br>", unsafe_allow_html=True)
         predict_btn = st.button("🚀 Etkileşimi Tahmin Et", type="primary", use_container_width=True)
 
     with sim_col2:
@@ -187,5 +169,5 @@ with tab3:
 # ==========================================
 # 6. ALT BİLGİ (FOOTER)
 # ==========================================
-st.markdown("---")
+st.divider()
 st.caption("🤖 ML & BI Dashboard | Zaman Serisi & Duygu Analizi Entegrasyonu")
