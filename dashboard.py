@@ -170,3 +170,28 @@ with sentiment_col:
         else:
             st.warning("🟡 **Sonuç: NÖTR (Neutral)**")
             st.info("ANN Güven Skoru: **%88.5**")
+st.markdown("---")
+
+# ---------------------------------------------------------
+# 5. VERİ SETİ ÖN İZLEME (İLK 10 SATIR)
+# ---------------------------------------------------------
+st.subheader("📋 Veri Seti Ön İzleme (İlk 10 Satır)")
+st.caption("Model eğitiminde ve analizlerde kullanılan 'zaman_entegreli_veri.csv' veri setinin ilk 10 kaydı:")
+
+try:
+    # Veri setini yüklüyoruz
+    df_preview = pd.read_csv("zaman_entegreli_veri.csv")
+    
+    # İlk 10 satırı gösteriyoruz
+    st.dataframe(df_preview.head(10), use_container_width=True)
+    
+    # İsteğe bağlı indir butonu
+    csv_data = df_preview.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Tüm Veri Setini CSV Olarak İndir",
+        data=csv_data,
+        file_name="zaman_entegreli_veri.csv",
+        mime="text/csv"
+    )
+except Exception as e:
+    st.warning("⚠️ 'zaman_entegreli_veri.csv' dosyası okunamadı. Lütfen dosyanın GitHub ana dizininde olduğundan emin olun.")
