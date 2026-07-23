@@ -26,7 +26,7 @@ st.set_page_config(
 @st.cache_data
 def load_data():
     # NOT: GitHub repondaki CSV dosyasının adını tam olarak buraya yaz (örn: social_media.csv)
-    df = pd.read_csv("dataset.csv") 
+df = pd.read_csv("zaman_entegreli_veri.csv")
     return df
 
 try:
