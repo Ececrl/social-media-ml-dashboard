@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
 
 # ==========================================
 # 1. SAYFA YAPILANDIRMASI VE TEMA
@@ -121,65 +119,35 @@ st.markdown("---")
 # ==========================================
 tab1, tab2, tab3 = st.tabs(["📈 Zaman Serisi Trendleri", "🔍 Değişken Korelasyonları", "🎛️ Etkileşim Simülatörü"])
 
-# --- TAB 1: ZAMAN SERİSİ TRENDLERİ ---
+# --- TAB 1: ZAMAN SERİSİ TRENDLERİ (Sadece Streamlit Chart) ---
 with tab1:
     st.subheader("📆 Zamana Bağlı Etkileşim Değişimi")
     
     if 'posted_datetime' in filtered_df.columns:
-        fig_trend = go.Figure()
+        # Zaman serisi verisini indeks haline getirip çizdiriyoruz
+        chart_data = filtered_df.set_index('posted_datetime')
+        cols_to_plot = [c for c in ['engagement_score', 'Rolling_Mean_7'] if c in chart_data.columns]
         
-        # Günlük Gerçekleşen Skor
-        fig_trend.add_trace(go.Scatter(
-            x=filtered_df['posted_datetime'], 
-            y=filtered_df['engagement_score'],
-            mode='lines+markers',
-            name='Günlük Etkileşim Skoru',
-            line=dict(color='#3366CC', width=1.5),
-            opacity=0.6
-        ))
-        
-        # 7 Günlük Hareketli Ortalama (Eğer varsa)
-        if 'Rolling_Mean_7' in filtered_df.columns:
-            fig_trend.add_trace(go.Scatter(
-                x=filtered_df['posted_datetime'], 
-                y=filtered_df['Rolling_Mean_7'],
-                mode='lines',
-                name='7 Günlük Trend (Rolling Mean)',
-                line=dict(color='#FF9900', width=3)
-            ))
-            
-        fig_trend.update_layout(
-            xaxis_title="Tarih",
-            yaxis_title="Etkileşim Skoru (0.0 - 1.0)",
-            hovermode="x unified",
-            height=420,
-            template="plotly_white"
-        )
-        st.plotly_chart(fig_trend, use_container_width=True)
+        st.line_chart(chart_data[cols_to_plot], height=400)
     else:
         st.warning("Zaman serisi grafiği için 'posted_datetime' sütunu bulunamadı.")
 
-# --- TAB 2: KORELASYON VE METRİKLER ---
+# --- TAB 2: KORELASYON VE METRİKLER (Sadece Streamlit Chart) ---
 with tab2:
     col_left, col_right = st.columns(2)
     
     with col_left:
         st.subheader("💬 Duygu Skoru vs Etkileşim Skoru")
-        if 'sentiment_score' in filtered_df.columns:
-            fig_scatter = px.scatter(
+        if 'sentiment_score' in filtered_df.columns and 'engagement_score' in filtered_df.columns:
+            st.scatter_chart(
                 filtered_df,
                 x='sentiment_score',
                 y='engagement_score',
-                color='engagement_score',
-                color_continuous_scale='Blues',
-                labels={'sentiment_score': 'Duygu Skoru (-1 ile +1)', 'engagement_score': 'Etkileşim Skoru (0-1)'},
-                template="plotly_white"
+                height=350
             )
-            st.plotly_chart(fig_scatter, use_container_width=True)
             
     with col_right:
         st.subheader("📋 Veri Özeti (Temizlenmiş)")
-        # Sadece görünürlüğü yüksek ana sütunları göster
         display_cols = [c for c in ['posted_datetime', 'engagement_score', 'sentiment_score', 'gunluk_post_sayisi', 'like_count'] if c in filtered_df.columns]
         st.dataframe(filtered_df[display_cols].head(10), use_container_width=True)
 
@@ -191,7 +159,7 @@ with tab3:
         st.subheader("🎛️ Etkileşim Tahmin Simülatörü")
         st.caption("Geçmiş günlerin başarı skorlarına (0.0 - 1.0) göre yarınki skoru simüle edin:")
         
-        # Girdiler 0.0 - 1.0 skalasında düzenlendi
+        # Girdiler 0.0 - 1.0 skalasında
         input_lag1 = st.slider("Dünkü Etkileşim Skoru (Lag_1)", min_value=0.0, max_value=1.0, value=0.55, step=0.05)
         input_lag2 = st.slider("Önceki Günkü Skoru (Lag_2)", min_value=0.0, max_value=1.0, value=0.50, step=0.05)
         input_rolling = st.slider("3 Günlük Ortalama Skor (Rolling_3)", min_value=0.0, max_value=1.0, value=0.52, step=0.05)
@@ -199,7 +167,7 @@ with tab3:
 
         # 0-1 arası skor hesabı
         estimated_score = (input_rolling * 0.45) + (input_lag1 * 0.30) + (input_lag2 * 0.20) + (input_sentiment * 0.05)
-        estimated_score = max(0.0, min(1.0, estimated_score)) # 0 ile 1 arasına sınırla
+        estimated_score = max(0.0, min(1.0, estimated_score))
 
         st.markdown("<br>", unsafe_allow_dict=True)
         predict_btn = st.button("🚀 Etkileşimi Tahmin Et", type="primary", use_container_width=True)
@@ -210,7 +178,6 @@ with tab3:
             st.success(f"### Tahmini Etkileşim Skoru: `{estimated_score:.2f}`")
             st.metric("Tahmini Başarı Oranı", f"%{estimated_score*100:.1f}")
             
-            # Başarı Durum Bildirimi
             if estimated_score >= 0.70:
                 st.balloons()
                 st.info("🔥 **Yüksek Performans:** Gönderilerin keşfete düşme ve viral olma olasılığı çok yüksek!")
