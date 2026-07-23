@@ -3,170 +3,184 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-# Sayfa Yapılandırması
-st.set_page_config(page_title="ML & BI Pro Dashboard", layout="wide")
-
-st.title("📊 Gelişmiş Sosyal Medya ML & BI Portalı")
-st.write("Makine Öğrenmesi Modelleri, Hiperparametre Testleri ve Canlı Analizler")
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
 
 # ---------------------------------------------------------
-# SIDEBAR: HİPERPARAMETRE VE MODEL AYARLARI
+# 1. SAYFA YAPILANDIRMASI
 # ---------------------------------------------------------
-st.sidebar.header("⚙️ Model Parametre Testi")
-st.sidebar.caption("Random Forest parametrelerini değiştirerek performansı gözlemleyin:")
-
-n_trees = st.sidebar.slider("Ağaç Sayısı (n_estimators)", min_value=10, max_value=200, value=100, step=10)
-max_depth = st.sidebar.slider("Maksimum Derinlik (max_depth)", min_value=1, max_value=20, value=10, step=1)
-
-# Simüle Edilen Dinamik Başarı Skoru (Ağaç sayısı ve derinliğe göre değişen dinamik skor)
-dynamic_r2 = round(80.0 + (np.log(n_trees) * 2.5) + (max_depth * 0.4), 2)
-if dynamic_r2 > 94.0:
-    dynamic_r2 = 94.0
-
-st.sidebar.metric("Simüle Edilen Random Forest R²", f"%{dynamic_r2}")
-
-# RAPOR İNDİRME BUTONU
-report_text = """
-==================================================
-SOSYAL MEDYA ML & BI PERFORMANS OZET RAPORU
-==================================================
-1. REGRESYON MODELLERI
-- Linear Regression: MAE = 1337.72 | RMSE = 1684.76 | R2 = %94.47
-- Ridge Regression: MAE = 1337.61  | RMSE = 1689.39 | R2 = %94.44
-- Random Forest:    MAE = 2274.97  | RMSE = 2907.92 | R2 = %83.51
-
-2. DUYGU SINIFLANDIRMA (ANN - MLPClassifier)
-- Model Accuracy (Dogruluk): %96.00
-==================================================
-"""
-
-st.download_button(
-    label="📥 Özet Raporu İndir (.txt)",
-    data=report_text,
-    file_name="ML_Model_Performans_Raporu.txt",
-    mime="text/plain"
+st.set_page_config(
+    page_title="Sosyal Medya Analiz & ML Dashboard",
+    page_icon="📊",
+    layout="wide"
 )
 
-st.markdown("---")
+# ---------------------------------------------------------
+# 2. VERİ YÜKLEME (Önbellek kullanarak hızlı çalışma)
+# ---------------------------------------------------------
+@st.cache_data
+def load_data():
+    # Veri setinizin yolunu kontrol edin (örneğin 'data.csv' veya 'social_media.csv')
+    df = pd.read_csv("dataset.csv") 
+    return df
+
+try:
+    df = load_data()
+except Exception as e:
+    # Veri seti okunamazsa örnek veri oluşturma (Yedek)
+    st.warning("Yerel veri seti bulunamadı, demo verisi yükleniyor...")
+    data = {
+        'Platform': np.random.choice(['Instagram', 'Twitter', 'LinkedIn', 'TikTok'], 500),
+        'Post_Type': np.random.choice(['Image', 'Video', 'Text'], 500),
+        'Followers': np.random.randint(1000, 100000, 500),
+        'Likes': np.random.randint(50, 5000, 500),
+        'Comments': np.random.randint(5, 500, 500),
+        'Shares': np.random.randint(0, 200, 500)
+    }
+    df = pd.DataFrame(data)
 
 # ---------------------------------------------------------
-# 1. KPI KARTLARI
+# 3. SIDEBAR (KENAR ÇUBUĞU) FİLTRELERİ
 # ---------------------------------------------------------
-col1, col2, col3 = st.columns(3)
-col1.metric("En Yüksek R² Skoru", "%94.47", "Linear Regression")
-col2.metric("En Düşük Hata (MAE)", "1,337.61", "Ridge Regression")
-col3.metric("ANN Sınıflandırma", "%96.00", "MLPClassifier")
+st.sidebar.title("🔍 Veri Filtreleme")
 
-st.markdown("---")
+# Platform Filtresi
+if 'Platform' in df.columns:
+    platforms = df['Platform'].unique().tolist()
+    selected_platforms = st.sidebar.multiselect(
+        "Platform Seçin:",
+        options=platforms,
+        default=platforms
+    )
+    df_filtered = df[df['Platform'].isin(selected_platforms)]
+else:
+    df_filtered = df.copy()
 
-# ---------------------------------------------------------
-# 2. MODEL PERFORMANS KARSILASTIRMA VE KARISIKLIK MATRISI
-# ---------------------------------------------------------
-left_column, right_column = st.columns([1, 1])
-
-with left_column:
-    st.subheader("📊 Regresyon Modelleri Karşılaştırması")
-    df_results = pd.DataFrame({
-        "Model": ["Linear Reg.", "Ridge Reg.", "Random Forest"],
-        "R2_Skoru": [94.47, 94.44, dynamic_r2],
-        "MAE": [1337.72, 1337.61, 2274.97]
-    })
-    
-    fig_comp, ax_comp = plt.subplots(figsize=(6, 3.5))
-    sns.barplot(data=df_results, x="Model", y="R2_Skoru", palette="Blues_d", ax=ax_comp)
-    ax_comp.set_ylabel("R² Skoru (%)")
-    ax_comp.set_ylim(70, 100)
-    for p in ax_comp.patches:
-        ax_comp.annotate(f"%{p.get_height():.2f}", (p.get_x() + p.get_width() / 2., p.get_height()),
-                        ha='center', va='center', xytext=(0, 5), textcoords='offset points')
-    st.pyplot(fig_comp)
-
-with right_column:
-    st.subheader("🧩 Duygu Sınıflandırma (ANN) Karmaşıklık Matrisi")
-    st.caption("MLPClassifier Modelinin Pozitif/Nötr/Negatif Tahmin Doğruluğu")
-    
-    # Simüle edilmiş Confusion Matrix
-    cm = np.array([[450, 12, 5], 
-                   [15, 380, 10], 
-                   [8, 14, 210]])
-    labels = ["Pozitif", "Nötr", "Negatif"]
-    
-    fig_cm, ax_cm = plt.subplots(figsize=(6, 3.5))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Purples", xticklabels=labels, yticklabels=labels, ax=ax_cm)
-    ax_cm.set_xlabel("Tahmin Edilen")
-    ax_cm.set_ylabel("Gerçek Değer")
-    st.pyplot(fig_cm)
-
-st.markdown("---")
+# İçerik Türü Filtresi
+if 'Post_Type' in df.columns:
+    post_types = df['Post_Type'].unique().tolist()
+    selected_types = st.sidebar.multiselect(
+        "İçerik Türü Seçin:",
+        options=post_types,
+        default=post_types
+    )
+    df_filtered = df_filtered[df_filtered['Post_Type'].isin(selected_types)]
 
 # ---------------------------------------------------------
-# 3. ZAMAN SERİSİ GRAFİĞİ
+# 4. ANA BAŞLIK VE METRİK KARTLARI (KPI PANELİ)
 # ---------------------------------------------------------
-st.subheader("📉 Gerçek vs. Tahmin Edilen Etkileşim Trendi")
-
-np.random.seed(42)
-dates = pd.date_range(start="2026-06-01", periods=30, freq="D")
-actual_values = np.random.normal(loc=25000, scale=5000, size=30).cumsum() / 10 + 15000
-predicted_values = actual_values + np.random.normal(loc=0, scale=1200, size=30)
-
-df_timeseries = pd.DataFrame({
-    "Tarih": dates,
-    "Gerçek Etkileşim": actual_values,
-    "Model Tahmini (Linear Reg)": predicted_values
-}).set_index("Tarih")
-
-fig_ts, ax_ts = plt.subplots(figsize=(12, 4))
-ax_ts.plot(df_timeseries.index, df_timeseries["Gerçek Etkileşim"], label="Gerçek Etkileşim", color="#1f77b4", linewidth=2, marker='o')
-ax_ts.plot(df_timeseries.index, df_timeseries["Model Tahmini (Linear Reg)"], label="Model Tahmini", color="#e377c2", linestyle="--", linewidth=2, marker='x')
-ax_ts.set_ylabel("Etkileşim Skoru")
-ax_ts.set_xlabel("Tarih")
-ax_ts.grid(True, linestyle=":", alpha=0.6)
-ax_ts.legend()
-
-fig_ts.autofmt_xdate(rotation=30)
-plt.tight_layout()
-
-st.pyplot(fig_ts)
+st.title("📱 Sosyal Medya Performance & ML Dashboard")
+st.markdown("Filtrelenmiş verilere ait anlık performans metrikleri ve makine öğrenmesi tahmin modeli.")
 
 st.markdown("---")
 
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
+        label="📌 Toplam Gönderi",
+        value=f"{len(df_filtered):,}"
+    )
+
+with col2:
+    avg_likes = df_filtered['Likes'].mean() if 'Likes' in df_filtered.columns else 0
+    st.metric(
+        label="❤️ Ort. Beğeni",
+        value=f"{avg_likes:.1f}"
+    )
+
+with col3:
+    avg_comments = df_filtered['Comments'].mean() if 'Comments' in df_filtered.columns else 0
+    st.metric(
+        label="💬 Ort. Yorum",
+        value=f"{avg_comments:.1f}"
+    )
+
+with col4:
+    max_likes = df_filtered['Likes'].max() if 'Likes' in df_filtered.columns else 0
+    st.metric(
+        label="🔥 Maksimum Beğeni",
+        value=f"{max_likes:,}"
+    )
+
+st.markdown("---")
+
 # ---------------------------------------------------------
-# 4. SİMÜLASYON VE DUYGU TESTİ
+# 5. SEKMELİ DÜZEN (TABS)
 # ---------------------------------------------------------
-sim_col, sentiment_col = st.columns([1, 1])
+tab1, tab2, tab3 = st.tabs(["📊 Analiz & Grafikler", "🤖 ML Beğeni Tahmini", "📋 Veri Tablosu"])
 
-with sim_col:
-    st.subheader("🎛️ Etkileşim Tahmin Simülatörü")
-    input_lag1 = st.slider("Dünkü Etkileşim (Lag_1)", min_value=1000, max_value=50000, value=25000, step=1000)
-    input_lag2 = st.slider("Önceki Günkü Etkileşim (Lag_2)", min_value=1000, max_value=50000, value=24000, step=1000)
-    input_rolling = st.slider("3 Günlük Ortalama (Rolling_Mean_3)", min_value=1000, max_value=50000, value=24500, step=1000)
-    input_followers = st.number_input("Takipçi Sayısı", min_value=1000, max_value=1000000, value=50000, step=5000)
-    input_sentiment = st.slider("Duygu Skoru (Sentiment)", min_value=-1.0, max_value=1.0, value=0.5, step=0.1)
-
-    estimated_engagement = (input_rolling * 0.47) + (input_lag1 * 0.23) + (input_lag2 * 0.22) + (input_followers * 0.05) + (input_sentiment * 1000)
-
-    if st.button("🚀 Etkileşimi Tahmin Et", type="primary"):
-        st.success(f"🎯 **Tahmini Etkileşim Skoru:** {estimated_engagement:,.2f}")
-
-with sentiment_col:
-    st.subheader("💬 Canlı Duygu Analizi (ANN Metin Sınıflandırma)")
-    user_text = st.text_area("Sosyal medya metnini yazın:", value="Bu ürün gerçekten harika, bayıldım! Kesinlikle tavsiye ederim.")
+# TAB 1: GRAFİKLER VE GÖRSELLEŞTİRME
+with tab1:
+    st.subheader("Gönderi Performans Analizleri")
     
-    if st.button("🧠 Duyguyu Analiz Et"):
-        text_lower = user_text.lower()
-        positive_words = ["harika", "güzel", "bayıldım", "süper", "iyi", "tavsiye", "efsane", "beğendim"]
-        negative_words = ["kötü", "berbat", "rezalet", "çöp", "yavaş", "beğenmedim", "sorun", "iğrenç"]
-        
-        pos_count = sum(1 for word in positive_words if word in text_lower)
-        neg_count = sum(1 for word in negative_words if word in text_lower)
-        
-        if pos_count > neg_count:
-            st.success("🟢 **Sonuç: POZİTİF (Positive)**")
-            st.info("ANN Güven Skoru: **%97.8**")
-        elif neg_count > pos_count:
-            st.error("🔴 **Sonuç: NEGATİF (Negative)**")
-            st.info("ANN Güven Skoru: **%95.2**")
+    g1, g2 = st.columns(2)
+    
+    with g1:
+        st.markdown("**Platformlara Göre Ortalama Beğeni**")
+        if 'Platform' in df_filtered.columns and 'Likes' in df_filtered.columns:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            sns.barplot(data=df_filtered, x='Platform', y='Likes', ax=ax, palette='Blues_d')
+            plt.xticks(rotation=45)
+            st.pyplot(fig)
         else:
-            st.warning("🟡 **Sonuç: NÖTR (Neutral)**")
-            st.info("ANN Güven Skoru: **%88.5**")
+            st.info("Bu grafik için 'Platform' ve 'Likes' sütunları gereklidir.")
+            
+    with g2:
+        st.markdown("**Beğeni ve Yorum Sayısı İlişkisi**")
+        if 'Likes' in df_filtered.columns and 'Comments' in df_filtered.columns:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            sns.scatterplot(data=df_filtered, x='Likes', y='Comments', hue='Platform' if 'Platform' in df_filtered.columns else None, ax=ax)
+            st.pyplot(fig)
+        else:
+            st.info("Bu grafik için 'Likes' ve 'Comments' sütunları gereklidir.")
+
+# TAB 2: MAKİNE ÖĞRENMESİ (MODEL TAHMİNİ)
+with tab2:
+    st.subheader("🤖 Beğeni (Likes) Tahmin Modeli")
+    st.write("Takipçi ve yorum sayısına göre tahmini beğeni oranını hesaplayın.")
+    
+    # Model Eğitimi (Örnek: Random Forest Regressor)
+    if {'Followers', 'Comments', 'Likes'}.issubset(df.columns):
+        X = df[['Followers', 'Comments']]
+        y = df['Likes']
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model.fit(X_train, y_train)
+        
+        y_pred = model.predict(X_test)
+        r2 = r2_score(y_test, y_pred)
+        
+        st.success(f"Model Başarıyla Eğitildi! Model Performansı ($R^2$ Skoru): **{r2:.2f}**")
+        
+        st.markdown("---")
+        st.markdown("#### 🔮 Canlı Tahmin Yapın")
+        
+        input_col1, input_col2 = st.columns(2)
+        with input_col1:
+            input_followers = st.number_input("Takipçi Sayısı:", min_value=0, value=10000, step=500)
+        with input_col2:
+            input_comments = st.number_input("Beklenen Yorum Sayısı:", min_value=0, value=50, step=5)
+            
+        if st.button("Beğeni Sayısını Tahmin Et"):
+            prediction = model.predict([[input_followers, input_comments]])
+            st.balloons()
+            st.metric(label="Tahmini Beğeni Sayısı", value=f"{int(prediction[0]):,} Beğeni")
+    else:
+        st.error("ML modeli için veri setinde 'Followers', 'Comments' ve 'Likes' sütunlarının bulunması gerekmektedir.")
+
+# TAB 3: VERİ TABLOSU VE İNDİRME
+with tab3:
+    st.subheader("Filtrelenmiş Veri Seti")
+    st.dataframe(df_filtered)
+    
+    # CSV İndirme Butonu
+    csv = df_filtered.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Filtrelenmiş Veriyi CSV Olarak İndir",
+        data=csv,
+        file_name='filtrelenmis_sosyal_medya_verisi.csv',
+        mime='text/csv'
+    )
