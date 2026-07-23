@@ -173,38 +173,33 @@ with sentiment_col:
 st.markdown("---")
 
 # ---------------------------------------------------------
+st.markdown("---")
+
 # ---------------------------------------------------------
-# 5. DÜZELTİLMİŞ VE TAMAMEN DOLU VERİ SETİ TABLOSU
+# 5. EKSİKSİZ VERİ SETİ TABLOSU (TÜM SÜTUNLAR DOLU)
 # ---------------------------------------------------------
-st.subheader("📋 Veri Seti Ön İzleme (Sadece Eksiksiz / Dolu Satırlar)")
-st.caption("Model eğitiminde kullanılan 'zaman_entegreli_veri.csv' veri setinin bütün sütunları %100 dolu olan ilk 10 kaydı:")
+st.subheader("📋 Veri Seti Ön İzleme (Tüm Sütunları Eksiksiz Dolu Satırlar)")
+st.caption("Veri setinde Lag ve Rolling dahil BÜTÜN sütunları %100 dolu olan ilk 10 kayıt:")
 
 try:
     df_raw = pd.read_csv("zaman_entegreli_veri.csv")
     
-    # DÜZELTME 1: Bütün sütunları dolu olan satırları filtrele (Eksik/NaN satırları tamamen çıkarır)
-    df_dolu = df_raw.dropna().copy()
-    
-    # DÜZELTME 2: Beğeni, yorum ve paylaşımın 0 olduğu hatalı günleri de süz
-    if {'like_count', 'comment_count', 'share_count'}.issubset(df_dolu.columns):
-        df_dolu = df_dolu[~((df_dolu['like_count'] == 0) & (df_dolu['comment_count'] == 0) & (df_dolu['share_count'] == 0))]
-        
-    # Sadece ana ve anlamlı sütunları ekrana getirelim
-    primary_columns = [
-        'posted_datetime', 'engagement_score', 'sentiment_score', 
-        'like_count', 'comment_count', 'share_count', 'gunluk_post_sayisi', 'Lag_1_Etkilesim'
-    ]
-    
-    existing_primary = [col for col in primary_columns if col in df_dolu.columns]
-    
-    if existing_primary:
-        st.dataframe(df_dolu[existing_primary].head(10), use_container_width=True)
+    # 1. Beğeni, yorum ve paylaşımın 0 olduğu geçersiz günleri süz
+    if {'like_count', 'comment_count', 'share_count'}.issubset(df_raw.columns):
+        df_valid = df_raw[~((df_raw['like_count'] == 0) & (df_raw['comment_count'] == 0) & (df_raw['share_count'] == 0))].copy()
     else:
-        st.dataframe(df_dolu.head(10), use_container_width=True)
+        df_valid = df_raw.copy()
         
-    csv_download = df_dolu.to_csv(index=False).encode('utf-8')
+    # 2. BÜTÜN SÜTUNLARI %100 DOLU OLAN SATIRLARI ÇEK (.dropna)
+    # Hiçbir sütun filtrelenmez; Lag, Rolling vb. tüm öznitelikler korunur.
+    df_fully_complete = df_valid.dropna()
+    
+    # Bütün sütunları dolu ilk 10 satırı göster
+    st.dataframe(df_fully_complete.head(10), use_container_width=True)
+        
+    csv_download = df_fully_complete.to_csv(index=False).encode('utf-8')
     st.download_button(
-        label="📥 Sadece Dolu Verileri CSV Olarak İndir",
+        label="📥 Eksiksiz Veri Setini CSV Olarak İndir",
         data=csv_download,
         file_name="zaman_entegreli_veri_eksiksiz.csv",
         mime="text/csv"
