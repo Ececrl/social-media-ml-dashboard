@@ -173,42 +173,40 @@ with sentiment_col:
 st.markdown("---")
 
 # ---------------------------------------------------------
-# 5. DÜZELTİLMİŞ VE TEMİZLENMİŞ VERİ SETİ TABLOSU
 # ---------------------------------------------------------
-st.subheader("📋 Veri Seti Ön İzleme (Temizlenmiş Görünüm)")
-st.caption("Model eğitiminde kullanılan 'zaman_entegreli_veri.csv' veri setinin gürültüden ve eksik değerlerden arındırılmış ilk 10 kaydı:")
+# 5. DÜZELTİLMİŞ VE TAMAMEN DOLU VERİ SETİ TABLOSU
+# ---------------------------------------------------------
+st.subheader("📋 Veri Seti Ön İzleme (Sadece Eksiksiz / Dolu Satırlar)")
+st.caption("Model eğitiminde kullanılan 'zaman_entegreli_veri.csv' veri setinin bütün sütunları %100 dolu olan ilk 10 kaydı:")
 
 try:
     df_raw = pd.read_csv("zaman_entegreli_veri.csv")
     
-    # DÜZELTME 1: Beğeni, yorum ve paylaşımın 0 olduğu geçersiz/boş günleri filtrele
-    if {'like_count', 'comment_count', 'share_count'}.issubset(df_raw.columns):
-        df_filtered = df_raw[~((df_raw['like_count'] == 0) & (df_raw['comment_count'] == 0) & (df_raw['share_count'] == 0))].copy()
-    else:
-        df_filtered = df_raw.copy()
-        
-    # DÜZELTME 2: 'None' / 'NaN' kalan eksik zaman serisi değerlerini doldur
-    df_clean = df_filtered.fillna(0)
+    # DÜZELTME 1: Bütün sütunları dolu olan satırları filtrele (Eksik/NaN satırları tamamen çıkarır)
+    df_dolu = df_raw.dropna().copy()
     
-    # DÜZELTME 3: Sadece ana ve en anlamlı sütunları göster
+    # DÜZELTME 2: Beğeni, yorum ve paylaşımın 0 olduğu hatalı günleri de süz
+    if {'like_count', 'comment_count', 'share_count'}.issubset(df_dolu.columns):
+        df_dolu = df_dolu[~((df_dolu['like_count'] == 0) & (df_dolu['comment_count'] == 0) & (df_dolu['share_count'] == 0))]
+        
+    # Sadece ana ve anlamlı sütunları ekrana getirelim
     primary_columns = [
         'posted_datetime', 'engagement_score', 'sentiment_score', 
-        'like_count', 'comment_count', 'share_count', 'gunluk_post_sayisi'
+        'like_count', 'comment_count', 'share_count', 'gunluk_post_sayisi', 'Lag_1_Etkilesim'
     ]
     
-    # Sütunların varlığını kontrol edip seçelim
-    existing_primary = [col for col in primary_columns if col in df_clean.columns]
+    existing_primary = [col for col in primary_columns if col in df_dolu.columns]
     
     if existing_primary:
-        st.dataframe(df_clean[existing_primary].head(10), use_container_width=True)
+        st.dataframe(df_dolu[existing_primary].head(10), use_container_width=True)
     else:
-        st.dataframe(df_clean.head(10), use_container_width=True)
+        st.dataframe(df_dolu.head(10), use_container_width=True)
         
-    csv_download = df_clean.to_csv(index=False).encode('utf-8')
+    csv_download = df_dolu.to_csv(index=False).encode('utf-8')
     st.download_button(
-        label="📥 Temizlenmiş Veri Setini CSV Olarak İndir",
+        label="📥 Sadece Dolu Verileri CSV Olarak İndir",
         data=csv_download,
-        file_name="zaman_entegreli_veri_temiz.csv",
+        file_name="zaman_entegreli_veri_eksiksiz.csv",
         mime="text/csv"
     )
 except Exception as e:
