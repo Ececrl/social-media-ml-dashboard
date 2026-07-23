@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Özel CSS Tasarımı
+# Özel CSS Tasarımı (unsafe_allow_html=True olarak düzeltildi)
 st.markdown("""
     <style>
     .main { padding: 1.5rem; }
@@ -24,7 +24,7 @@ st.markdown("""
     }
     .stAlert { border-radius: 8px; }
     </style>
-""", unsafe_allow_dict=True)
+""", unsafe_allow_html=True)
 
 
 # ==========================================
@@ -119,20 +119,18 @@ st.markdown("---")
 # ==========================================
 tab1, tab2, tab3 = st.tabs(["📈 Zaman Serisi Trendleri", "🔍 Değişken Korelasyonları", "🎛️ Etkileşim Simülatörü"])
 
-# --- TAB 1: ZAMAN SERİSİ TRENDLERİ (Sadece Streamlit Chart) ---
+# --- TAB 1: ZAMAN SERİSİ TRENDLERİ ---
 with tab1:
     st.subheader("📆 Zamana Bağlı Etkileşim Değişimi")
     
     if 'posted_datetime' in filtered_df.columns:
-        # Zaman serisi verisini indeks haline getirip çizdiriyoruz
         chart_data = filtered_df.set_index('posted_datetime')
         cols_to_plot = [c for c in ['engagement_score', 'Rolling_Mean_7'] if c in chart_data.columns]
-        
         st.line_chart(chart_data[cols_to_plot], height=400)
     else:
         st.warning("Zaman serisi grafiği için 'posted_datetime' sütunu bulunamadı.")
 
-# --- TAB 2: KORELASYON VE METRİKLER (Sadece Streamlit Chart) ---
+# --- TAB 2: KORELASYON VE METRİKLER ---
 with tab2:
     col_left, col_right = st.columns(2)
     
@@ -159,17 +157,15 @@ with tab3:
         st.subheader("🎛️ Etkileşim Tahmin Simülatörü")
         st.caption("Geçmiş günlerin başarı skorlarına (0.0 - 1.0) göre yarınki skoru simüle edin:")
         
-        # Girdiler 0.0 - 1.0 skalasında
         input_lag1 = st.slider("Dünkü Etkileşim Skoru (Lag_1)", min_value=0.0, max_value=1.0, value=0.55, step=0.05)
         input_lag2 = st.slider("Önceki Günkü Skoru (Lag_2)", min_value=0.0, max_value=1.0, value=0.50, step=0.05)
         input_rolling = st.slider("3 Günlük Ortalama Skor (Rolling_3)", min_value=0.0, max_value=1.0, value=0.52, step=0.05)
         input_sentiment = st.slider("Duygu Skoru (Sentiment)", min_value=-1.0, max_value=1.0, value=0.10, step=0.1)
 
-        # 0-1 arası skor hesabı
         estimated_score = (input_rolling * 0.45) + (input_lag1 * 0.30) + (input_lag2 * 0.20) + (input_sentiment * 0.05)
         estimated_score = max(0.0, min(1.0, estimated_score))
 
-        st.markdown("<br>", unsafe_allow_dict=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         predict_btn = st.button("🚀 Etkileşimi Tahmin Et", type="primary", use_container_width=True)
 
     with sim_col2:
