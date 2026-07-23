@@ -25,16 +25,21 @@ st.set_page_config(
 @st.cache_data
 def load_data():
     df = pd.read_csv("zaman_entegreli_veri.csv")
-    # Eğer tarih sütunu varsa datetime formatına çevirelim
+    
+    # Tarih sütunlarını datetime formatına çevir
     for col in df.columns:
-        if 'date' in col.lower() or 'tarih' in col.lower() or 'time' in col.lower():
-            df[col] = pd.to_datetime(df[col], errors='ignore')
+        if any(k in col.lower() for k in ['date', 'tarih', 'time', 'saat']):
+            try:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+            except Exception:
+                pass
     return df
 
 try:
     df = load_data()
 except Exception as e:
-    st.error(f"Veri yüklenirken hata oluştu: {e}")
+    st.error(f"❌ Veri yüklenirken hata oluştu: {e}")
+    st.info("Lütfen GitHub ana dizininde 'zaman_entegreli_veri.csv' dosyasının bulunduğundan emin olun.")
     st.stop()
 
 # ---------------------------------------------------------
@@ -44,38 +49,37 @@ st.sidebar.title("🔍 Veri Filtreleme")
 
 df_filtered = df.copy()
 
-# Platform Filtresi (Varsa)
-if 'Platform' in df.columns:
-    platforms = df['Platform'].unique().tolist()
+# Platform Filtresi (Eğer sütun mevcutsa)
+platform_col = [c for c in df.columns if 'platform' in c.lower()]
+if platform_col:
+    p_col = platform_col[0]
+    platforms = df[p_col].dropna().unique().tolist()
     selected_platforms = st.sidebar.multiselect("Platform Seçin:", options=platforms, default=platforms)
     if selected_platforms:
-        df_filtered = df_filtered[df_filtered['Platform'].isin(selected_platforms)]
-
-# İçerik Türü Filtresi (Varsa)
-if 'Post_Type' in df.columns:
-    post_types = df['Post_Type'].unique().tolist()
-    selected_types = st.sidebar.multiselect("İçerik Türü Seçin:", options=post_types, default=post_types)
-    if selected_types:
-        df_filtered = df_filtered[df_filtered['Post_Type'].isin(selected_types)]
+        df_filtered = df_filtered[df_filtered[p_col].isin(selected_platforms)]
 
 # ---------------------------------------------------------
 # 4. KPI METRİK KARTLARI
 # ---------------------------------------------------------
-st.title("📱 Sosyal Medya Zaman Entegreli ML Dashboard")
-st.markdown("Zaman serisi entegrasyonlu veri seti ve makine öğrenmesi modelleri karşılaştırması.")
+st.title("📱 Sosyal Medya Performance & ML Dashboard")
+st.markdown("Zaman entegreli veri seti ve makine öğrenmesi modelleri karşılaştırma paneli.")
 st.markdown("---")
 
 col1, col2, col3, col4 = st.columns(4)
+
+target_col = 'Likes' if 'Likes' in df_filtered.columns else df_filtered.select_dtypes(include=[np.number]).columns[0]
+
 with col1:
     st.metric(label="📌 Toplam Gönderi", value=f"{len(df_filtered):,}")
 with col2:
-    avg_likes = df_filtered['Likes'].mean() if 'Likes' in df_filtered.columns else 0
+    avg_likes = df_filtered[target_col].mean() if target_col in df_filtered.columns else 0
     st.metric(label="❤️ Ort. Beğeni", value=f"{avg_likes:.1f}")
 with col3:
-    avg_comments = df_filtered['Comments'].mean() if 'Comments' in df_filtered.columns else 0
+    comments_col = [c for c in df_filtered.columns if 'comment' in c.lower() or 'yorum' in c.lower()]
+    avg_comments = df_filtered[comments_col[0]].mean() if comments_col else 0
     st.metric(label="💬 Ort. Yorum", value=f"{avg_comments:.1f}")
 with col4:
-    max_likes = df_filtered['Likes'].max() if 'Likes' in df_filtered.columns else 0
+    max_likes = df_filtered[target_col].max() if target_col in df_filtered.columns else 0
     st.metric(label="🔥 Maksimum Beğeni", value=f"{max_likes:,}")
 
 st.markdown("---")
@@ -83,58 +87,52 @@ st.markdown("---")
 # ---------------------------------------------------------
 # 5. SEKMELER
 # ---------------------------------------------------------
-tab1, tab2, tab3 = st.tabs(["📊 Zaman & Trend Analizi", "🤖 Regresyon Modelleri Karşılaştırması", "📋 Veri Tablosu"])
+tab1, tab2, tab3 = st.tabs(["📊 Analiz & Grafikler", "🤖 Regresyon Modelleri Karşılaştırması", "📋 Veri Tablosu"])
 
-# TAB 1: GRAFİKLER & ZAMAN TRENDLERİ
+# TAB 1: GRAFİKLER & TREND ANALİZİ
 with tab1:
     st.subheader("Gönderi & Zaman Serisi Analizleri")
     g1, g2 = st.columns(2)
     
-    # Tarih/Zaman Sütununu Tespit Etme
-    date_cols = [c for c in df_filtered.columns if 'date' in c.lower() or 'tarih' in c.lower() or 'time' in c.lower() or 'saat' in c.lower()]
+    date_cols = [c for c in df_filtered.columns if any(k in c.lower() for k in ['date', 'tarih', 'time'])]
     
     with g1:
         st.markdown("**Zaman İçindeki Beğeni Trendi**")
-        if date_cols and 'Likes' in df_filtered.columns:
+        if date_cols and target_col in df_filtered.columns:
             fig, ax = plt.subplots(figsize=(6, 4))
-            # Zaman sıralı grafik
             df_sorted = df_filtered.sort_values(by=date_cols[0])
-            sns.lineplot(data=df_sorted, x=date_cols[0], y='Likes', ax=ax, color='tab:blue')
-            plt.xticks(rotation=45)
-            st.pyplot(fig)
-        elif 'Platform' in df_filtered.columns and 'Likes' in df_filtered.columns:
-            fig, ax = plt.subplots(figsize=(6, 4))
-            sns.barplot(data=df_filtered, x='Platform', y='Likes', ax=ax, palette='Blues_d')
+            sns.lineplot(data=df_sorted, x=date_cols[0], y=target_col, ax=ax, color='tab:blue')
             plt.xticks(rotation=45)
             st.pyplot(fig)
         else:
-            st.info("Trend grafiği için tarih/zaman sütunları kullanılıyor.")
+            st.info("Zaman grafiği için tarih verisi işleniyor.")
             
     with g2:
-        st.markdown("**Beğeni ve Yorum Sayısı İlişkisi**")
-        if 'Likes' in df_filtered.columns and 'Comments' in df_filtered.columns:
+        st.markdown("**Beğeni ve Etkileşim İlişkisi**")
+        numeric_cols = df_filtered.select_dtypes(include=[np.number]).columns.tolist()
+        if len(numeric_cols) >= 2:
             fig, ax = plt.subplots(figsize=(6, 4))
-            sns.scatterplot(data=df_filtered, x='Likes', y='Comments', hue='Platform' if 'Platform' in df_filtered.columns else None, ax=ax)
+            sns.scatterplot(data=df_filtered, x=numeric_cols[0], y=numeric_cols[1], ax=ax, color='purple')
             st.pyplot(fig)
 
 # TAB 2: REGRESYON MODELLERİ KARŞILAŞTIRMASI
 with tab2:
     st.subheader("📊 Model Performans Sonuçları")
     
-    # ML için yalnızca sayısal sütunları seçme
-    numeric_df = df.select_dtypes(include=[np.number])
+    # ML Modelleri için Sayısal Sütunlar
+    numeric_df = df.select_dtypes(include=[np.number]).dropna()
     
-    if 'Likes' in numeric_df.columns and numeric_df.shape[1] > 1:
-        X = numeric_df.drop(columns=['Likes'])
-        y = numeric_df['Likes']
+    if target_col in numeric_df.columns and numeric_df.shape[1] > 1:
+        X = numeric_df.drop(columns=[target_col])
+        y = numeric_df[target_col]
         
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
-        # Karşılaştırılacak Modeller
+        # 1. Görseldeki 3 Model
         models = {
-            "Linear Regression": LinearRegression(),
-            "Ridge Regression": Ridge(),
-            "Random Forest Regressor": RandomForestRegressor(n_estimators=100, random_state=42)
+            "1. Linear Regression": LinearRegression(),
+            "2. Ridge Regression": Ridge(),
+            "3. Random Forest Regressor": RandomForestRegressor(n_estimators=100, random_state=42)
         }
         
         results = []
@@ -154,7 +152,7 @@ with tab2:
                 "RMSE": round(rmse, 2),
                 "R² (%)": f"%{r2 * 100:.2f}"
             })
-            trained_models[name] = model
+            trained_models[name] = (model, r2)
             
         results_df = pd.DataFrame(results)
         
@@ -166,15 +164,18 @@ with tab2:
             
         with col_chart:
             st.markdown("#### 📊 R² Performansı Kıyaslaması")
-            r2_numeric = [r2_score(y_test, trained_models[m].predict(X_test)) for m in models.keys()]
-            chart_df = pd.DataFrame({"Model": list(models.keys()), "R² Skoru": r2_numeric})
+            chart_data = pd.DataFrame({
+                "Model": [name.split(". ")[1] for name in models.keys()],
+                "R² Skoru": [trained_models[name][1] for name in models.keys()]
+            })
             
             fig, ax = plt.subplots(figsize=(6, 3.5))
-            sns.barplot(data=chart_df, x='Model', y='R² Skoru', ax=ax, palette='viridis')
-            plt.xticks(rotation=20)
+            sns.barplot(data=chart_data, x='Model', y='R² Skoru', ax=ax, palette='viridis')
+            plt.xticks(rotation=15)
+            plt.ylim(0, 1.0)
             st.pyplot(fig)
     else:
-        st.error("ML modellerini eğitmek için sayısal sütunlar (ör. 'Likes') gerekiyor.")
+        st.error("ML modellerini eğitmek için yeterli sayısal sütun bulunamadı.")
 
 # TAB 3: VERİ TABLOSU
 with tab3:
