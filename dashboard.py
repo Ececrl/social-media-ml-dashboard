@@ -1,208 +1,228 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
 
-# Sayfa Yapılandırması
-st.set_page_config(page_title="ML & BI Pro Dashboard", layout="wide")
-
-st.title("📊 Gelişmiş Sosyal Medya ML & BI Portalı")
-st.write("Makine Öğrenmesi Modelleri, Hiperparametre Testleri ve Canlı Analizler")
-
-# ---------------------------------------------------------
-# SIDEBAR: HİPERPARAMETRE VE MODEL AYARLARI
-# ---------------------------------------------------------
-st.sidebar.header("⚙️ Model Parametre Testi")
-st.sidebar.caption("Random Forest parametrelerini değiştirerek performansı gözlemleyin:")
-
-n_trees = st.sidebar.slider("Ağaç Sayısı (n_estimators)", min_value=10, max_value=200, value=100, step=10)
-max_depth = st.sidebar.slider("Maksimum Derinlik (max_depth)", min_value=1, max_value=20, value=10, step=1)
-
-# Simüle Edilen Dinamik Başarı Skoru
-dynamic_r2 = round(80.0 + (np.log(n_trees) * 2.5) + (max_depth * 0.4), 2)
-if dynamic_r2 > 94.0:
-    dynamic_r2 = 94.0
-
-st.sidebar.metric("Simüle Edilen Random Forest R²", f"%{dynamic_r2}")
-
-# RAPOR İNDİRME BUTONU
-report_text = """
-==================================================
-SOSYAL MEDYA ML & BI PERFORMANS OZET RAPORU
-==================================================
-1. REGRESYON MODELLERI
-- Linear Regression: MAE = 1337.72 | RMSE = 1684.76 | R2 = %94.47
-- Ridge Regression: MAE = 1337.61  | RMSE = 1689.39 | R2 = %94.44
-- Random Forest:    MAE = 2274.97  | RMSE = 2907.92 | R2 = %83.51
-
-2. DUYGU SINIFLANDIRMA (ANN - MLPClassifier)
-- Model Accuracy (Dogruluk): %96.00
-==================================================
-"""
-
-st.download_button(
-    label="📥 Özet Raporu İndir (.txt)",
-    data=report_text,
-    file_name="ML_Model_Performans_Raporu.txt",
-    mime="text/plain"
+# ==========================================
+# 1. SAYFA YAPILANDIRMASI VE TEMA
+# ==========================================
+st.set_page_config(
+    page_title="Sosyal Medya BI & ML Analiz Paneli",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-st.markdown("---")
+# Özel CSS Tasarımı
+st.markdown("""
+    <style>
+    .main { padding: 1.5rem; }
+    .stMetric {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .stAlert { border-radius: 8px; }
+    </style>
+""", unsafe_allow_dict=True)
 
-# ---------------------------------------------------------
-# 1. KPI KARTLARI
-# ---------------------------------------------------------
-col1, col2, col3 = st.columns(3)
-col1.metric("En Yüksek R² Skoru", "%94.47", "Linear Regression")
-col2.metric("En Düşük Hata (MAE)", "1,337.61", "Ridge Regression")
-col3.metric("ANN Sınıflandırma", "%96.00", "MLPClassifier")
 
-st.markdown("---")
-
-# ---------------------------------------------------------
-# 2. MODEL PERFORMANS KARSILASTIRMA VE KARISIKLIK MATRISI
-# ---------------------------------------------------------
-left_column, right_column = st.columns([1, 1])
-
-with left_column:
-    st.subheader("📊 Regresyon Modelleri Karşılaştırması")
-    df_results = pd.DataFrame({
-        "Model": ["Linear Reg.", "Ridge Reg.", "Random Forest"],
-        "R2_Skoru": [94.47, 94.44, dynamic_r2],
-        "MAE": [1337.72, 1337.61, 2274.97]
-    })
+# ==========================================
+# 2. VERİ YÜKLEME VE ÖN İŞLEME
+# ==========================================
+@st.cache_data
+def load_data():
+    # İşlenmiş zaman serisi verisini yükle
+    df = pd.read_csv("zaman_entegreli_veri.csv")
     
-    fig_comp, ax_comp = plt.subplots(figsize=(6, 3.5))
-    sns.barplot(data=df_results, x="Model", y="R2_Skoru", palette="Blues_d", ax=ax_comp)
-    ax_comp.set_ylabel("R² Skoru (%)")
-    ax_comp.set_ylim(70, 100)
-    for p in ax_comp.patches:
-        ax_comp.annotate(f"%{p.get_height():.2f}", (p.get_x() + p.get_width() / 2., p.get_height()),
-                        ha='center', va='center', xytext=(0, 5), textcoords='offset points')
-    st.pyplot(fig_comp)
-
-with right_column:
-    st.subheader("🧩 Duygu Sınıflandırma (ANN) Karmaşıklık Matrisi")
-    st.caption("MLPClassifier Modelinin Pozitif/Nötr/Negatif Tahmin Doğruluğu")
+    # Tarih sütununu datetime formatına çevir
+    if 'posted_datetime' in df.columns:
+        df['posted_datetime'] = pd.to_datetime(df['posted_datetime'])
+        df = df.sort_values('posted_datetime')
     
-    cm = np.array([[450, 12, 5], 
-                   [15, 380, 10], 
-                   [8, 14, 210]])
-    labels = ["Pozitif", "Nötr", "Negatif"]
-    
-    fig_cm, ax_cm = plt.subplots(figsize=(6, 3.5))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Purples", xticklabels=labels, yticklabels=labels, ax=ax_cm)
-    ax_cm.set_xlabel("Tahmin Edilen")
-    ax_cm.set_ylabel("Gerçek Değer")
-    st.pyplot(fig_cm)
-
-st.markdown("---")
-
-# ---------------------------------------------------------
-# 3. ZAMAN SERİSİ GRAFİĞİ
-# ---------------------------------------------------------
-st.subheader("📉 Gerçek vs. Tahmin Edilen Etkileşim Trendi")
-
-np.random.seed(42)
-dates = pd.date_range(start="2026-06-01", periods=30, freq="D")
-actual_values = np.random.normal(loc=25000, scale=5000, size=30).cumsum() / 10 + 15000
-predicted_values = actual_values + np.random.normal(loc=0, scale=1200, size=30)
-
-df_timeseries = pd.DataFrame({
-    "Tarih": dates,
-    "Gerçek Etkileşim": actual_values,
-    "Model Tahmini (Linear Reg)": predicted_values
-}).set_index("Tarih")
-
-fig_ts, ax_ts = plt.subplots(figsize=(12, 4))
-ax_ts.plot(df_timeseries.index, df_timeseries["Gerçek Etkileşim"], label="Gerçek Etkileşim", color="#1f77b4", linewidth=2, marker='o')
-ax_ts.plot(df_timeseries.index, df_timeseries["Model Tahmini (Linear Reg)"], label="Model Tahmini", color="#e377c2", linestyle="--", linewidth=2, marker='x')
-ax_ts.set_ylabel("Etkileşim Skoru")
-ax_ts.set_xlabel("Tarih")
-ax_ts.grid(True, linestyle=":", alpha=0.6)
-ax_ts.legend()
-
-fig_ts.autofmt_xdate(rotation=30)
-plt.tight_layout()
-
-st.pyplot(fig_ts)
-
-st.markdown("---")
-
-# ---------------------------------------------------------
-# 4. SİMÜLASYON VE DUYGU TESTİ
-# ---------------------------------------------------------
-sim_col, sentiment_col = st.columns([1, 1])
-
-with sim_col:
-    st.subheader("🎛️ Etkileşim Tahmin Simülatörü")
-    input_lag1 = st.slider("Dünkü Etkileşim (Lag_1)", min_value=1000, max_value=50000, value=25000, step=1000)
-    input_lag2 = st.slider("Önceki Günkü Etkileşim (Lag_2)", min_value=1000, max_value=50000, value=24000, step=1000)
-    input_rolling = st.slider("3 Günlük Ortalama (Rolling_Mean_3)", min_value=1000, max_value=50000, value=24500, step=1000)
-    input_followers = st.number_input("Takipçi Sayısı", min_value=1000, max_value=1000000, value=50000, step=5000)
-    input_sentiment = st.slider("Duygu Skoru (Sentiment)", min_value=-1.0, max_value=1.0, value=0.5, step=0.1)
-
-    estimated_engagement = (input_rolling * 0.47) + (input_lag1 * 0.23) + (input_lag2 * 0.22) + (input_followers * 0.05) + (input_sentiment * 1000)
-
-    if st.button("🚀 Etkileşimi Tahmin Et", type="primary"):
-        st.success(f"🎯 **Tahmini Etkileşim Skoru:** {estimated_engagement:,.2f}")
-
-with sentiment_col:
-    st.subheader("💬 Canlı Duygu Analizi (ANN Metin Sınıflandırma)")
-    user_text = st.text_area("Sosyal medya metnini yazın:", value="Bu ürün gerçekten harika, bayıldım! Kesinlikle tavsiye ederim.")
-    
-    if st.button("🧠 Duyguyu Analiz Et"):
-        text_lower = user_text.lower()
-        positive_words = ["harika", "güzel", "bayıldım", "süper", "iyi", "tavsiye", "efsane", "beğendim"]
-        negative_words = ["kötü", "berbat", "rezalet", "çöp", "yavaş", "beğenmedim", "sorun", "iğrenç"]
+    # Ghost Day (Sıfır etkileşimli/eksik veri) ve NaN Temizliği
+    df_clean = df.dropna().copy()
+    if 'engagement_score' in df_clean.columns:
+        df_clean = df_clean[df_clean['engagement_score'] > 0]
         
-        pos_count = sum(1 for word in positive_words if word in text_lower)
-        neg_count = sum(1 for word in negative_words if word in text_lower)
-        
-        if pos_count > neg_count:
-            st.success("🟢 **Sonuç: POZİTİF (Positive)**")
-            st.info("ANN Güven Skoru: **%97.8**")
-        elif neg_count > pos_count:
-            st.error("🔴 **Sonuç: NEGATİF (Negative)**")
-            st.info("ANN Güven Skoru: **%95.2**")
-        else:
-            st.warning("🟡 **Sonuç: NÖTR (Neutral)**")
-            st.info("ANN Güven Skoru: **%88.5**")
-
-st.markdown("---")
-
-# ---------------------------------------------------------
-st.markdown("---")
-
-# ---------------------------------------------------------
-# 5. EKSİKSİZ VERİ SETİ TABLOSU (TÜM SÜTUNLAR DOLU)
-# ---------------------------------------------------------
-st.subheader("📋 Veri Seti Ön İzleme (Tüm Sütunları Eksiksiz Dolu Satırlar)")
-st.caption("Veri setinde Lag ve Rolling dahil BÜTÜN sütunları %100 dolu olan ilk 10 kayıt:")
+    return df_clean
 
 try:
-    df_raw = pd.read_csv("zaman_entegreli_veri.csv")
-    
-    # 1. Beğeni, yorum ve paylaşımın 0 olduğu geçersiz günleri süz
-    if {'like_count', 'comment_count', 'share_count'}.issubset(df_raw.columns):
-        df_valid = df_raw[~((df_raw['like_count'] == 0) & (df_raw['comment_count'] == 0) & (df_raw['share_count'] == 0))].copy()
-    else:
-        df_valid = df_raw.copy()
-        
-    # 2. BÜTÜN SÜTUNLARI %100 DOLU OLAN SATIRLARI ÇEK (.dropna)
-    # Hiçbir sütun filtrelenmez; Lag, Rolling vb. tüm öznitelikler korunur.
-    df_fully_complete = df_valid.dropna()
-    
-    # Bütün sütunları dolu ilk 10 satırı göster
-    st.dataframe(df_fully_complete.head(10), use_container_width=True)
-        
-    csv_download = df_fully_complete.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Eksiksiz Veri Setini CSV Olarak İndir",
-        data=csv_download,
-        file_name="zaman_entegreli_veri_eksiksiz.csv",
-        mime="text/csv"
-    )
+    df = load_data()
 except Exception as e:
-    st.warning("⚠️ 'zaman_entegreli_veri.csv' dosyası okunamadı.")
+    st.error(f"Veri dosyası yüklenirken bir hata oluştu: {e}")
+    st.stop()
+
+
+# ==========================================
+# 3. YAN MENÜ (SIDEBAR) & FİLTRELER
+# ==========================================
+st.sidebar.image("https://img.icons8.com/color/96/dashboard.png", width=80)
+st.sidebar.title("📌 Kontrol Paneli")
+st.sidebar.markdown("---")
+
+# Tarih Aralığı Filtresi
+if 'posted_datetime' in df.columns:
+    min_date = df['posted_datetime'].min().date()
+    max_date = df['posted_datetime'].max().date()
+    
+    selected_date_range = st.sidebar.date_input(
+        "📅 Tarih Aralığı Seçin",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
+    )
+    
+    if isinstance(selected_date_range, tuple) and len(selected_date_range) == 2:
+        start_date, end_date = selected_date_range
+        mask = (df['posted_datetime'].dt.date >= start_date) & (df['posted_datetime'].dt.date <= end_date)
+        filtered_df = df.loc[mask]
+    else:
+        filtered_df = df.copy()
+else:
+    filtered_df = df.copy()
+
+st.sidebar.markdown("---")
+st.sidebar.info(f"🟢 **Aktif Veri Sayısı:** {len(filtered_df)} Gün")
+
+
+# ==========================================
+# 4. ANA BAŞLIK VE ÖZET METRİKLER (KPIs)
+# ==========================================
+st.title("📊 Sosyal Medya Performans & Tahmin Paneli")
+st.caption("Zaman Serisi Entegreli Etkileşim ve Duygu Analizi Dashboard'u")
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    avg_engagement = filtered_df['engagement_score'].mean()
+    st.metric("🎯 Ort. Etkileşim Skoru", f"{avg_engagement:.2f}", delta=f"%{avg_engagement*100:.1f} Başarı")
+
+with col2:
+    total_likes = filtered_df['like_count'].sum() if 'like_count' in filtered_df.columns else 0
+    st.metric("❤️ Toplam Beğeni", f"{total_likes:,.0f}")
+
+with col3:
+    total_posts = filtered_df['gunluk_post_sayisi'].sum() if 'gunluk_post_sayisi' in filtered_df.columns else len(filtered_df)
+    st.metric("📝 Toplam İçerik", f"{total_posts:,.0f}")
+
+with col4:
+    avg_sentiment = filtered_df['sentiment_score'].mean() if 'sentiment_score' in filtered_df.columns else 0
+    sentiment_label = "Pozitif" if avg_sentiment > 0.05 else ("Negatif" if avg_sentiment < -0.05 else "Nötr")
+    st.metric("🎭 Ort. Duygu Skoru", f"{avg_sentiment:.2f}", delta=sentiment_label)
+
+st.markdown("---")
+
+
+# ==========================================
+# 5. GRAFİK VE ANALİZ SEKMELERİ
+# ==========================================
+tab1, tab2, tab3 = st.tabs(["📈 Zaman Serisi Trendleri", "🔍 Değişken Korelasyonları", "🎛️ Etkileşim Simülatörü"])
+
+# --- TAB 1: ZAMAN SERİSİ TRENDLERİ ---
+with tab1:
+    st.subheader("📆 Zamana Bağlı Etkileşim Değişimi")
+    
+    if 'posted_datetime' in filtered_df.columns:
+        fig_trend = go.Figure()
+        
+        # Günlük Gerçekleşen Skor
+        fig_trend.add_trace(go.Scatter(
+            x=filtered_df['posted_datetime'], 
+            y=filtered_df['engagement_score'],
+            mode='lines+markers',
+            name='Günlük Etkileşim Skoru',
+            line=dict(color='#3366CC', width=1.5),
+            opacity=0.6
+        ))
+        
+        # 7 Günlük Hareketli Ortalama (Eğer varsa)
+        if 'Rolling_Mean_7' in filtered_df.columns:
+            fig_trend.add_trace(go.Scatter(
+                x=filtered_df['posted_datetime'], 
+                y=filtered_df['Rolling_Mean_7'],
+                mode='lines',
+                name='7 Günlük Trend (Rolling Mean)',
+                line=dict(color='#FF9900', width=3)
+            ))
+            
+        fig_trend.update_layout(
+            xaxis_title="Tarih",
+            yaxis_title="Etkileşim Skoru (0.0 - 1.0)",
+            hovermode="x unified",
+            height=420,
+            template="plotly_white"
+        )
+        st.plotly_chart(fig_trend, use_container_width=True)
+    else:
+        st.warning("Zaman serisi grafiği için 'posted_datetime' sütunu bulunamadı.")
+
+# --- TAB 2: KORELASYON VE METRİKLER ---
+with tab2:
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.subheader("💬 Duygu Skoru vs Etkileşim Skoru")
+        if 'sentiment_score' in filtered_df.columns:
+            fig_scatter = px.scatter(
+                filtered_df,
+                x='sentiment_score',
+                y='engagement_score',
+                color='engagement_score',
+                color_continuous_scale='Blues',
+                labels={'sentiment_score': 'Duygu Skoru (-1 ile +1)', 'engagement_score': 'Etkileşim Skoru (0-1)'},
+                template="plotly_white"
+            )
+            st.plotly_chart(fig_scatter, use_container_width=True)
+            
+    with col_right:
+        st.subheader("📋 Veri Özeti (Temizlenmiş)")
+        # Sadece görünürlüğü yüksek ana sütunları göster
+        display_cols = [c for c in ['posted_datetime', 'engagement_score', 'sentiment_score', 'gunluk_post_sayisi', 'like_count'] if c in filtered_df.columns]
+        st.dataframe(filtered_df[display_cols].head(10), use_container_width=True)
+
+# --- TAB 3: ETKİLEŞİM TAHMİN SİMÜLATÖRÜ ---
+with tab3:
+    sim_col1, sim_col2 = st.columns([1, 1])
+    
+    with sim_col1:
+        st.subheader("🎛️ Etkileşim Tahmin Simülatörü")
+        st.caption("Geçmiş günlerin başarı skorlarına (0.0 - 1.0) göre yarınki skoru simüle edin:")
+        
+        # Girdiler 0.0 - 1.0 skalasında düzenlendi
+        input_lag1 = st.slider("Dünkü Etkileşim Skoru (Lag_1)", min_value=0.0, max_value=1.0, value=0.55, step=0.05)
+        input_lag2 = st.slider("Önceki Günkü Skoru (Lag_2)", min_value=0.0, max_value=1.0, value=0.50, step=0.05)
+        input_rolling = st.slider("3 Günlük Ortalama Skor (Rolling_3)", min_value=0.0, max_value=1.0, value=0.52, step=0.05)
+        input_sentiment = st.slider("Duygu Skoru (Sentiment)", min_value=-1.0, max_value=1.0, value=0.10, step=0.1)
+
+        # 0-1 arası skor hesabı
+        estimated_score = (input_rolling * 0.45) + (input_lag1 * 0.30) + (input_lag2 * 0.20) + (input_sentiment * 0.05)
+        estimated_score = max(0.0, min(1.0, estimated_score)) # 0 ile 1 arasına sınırla
+
+        st.markdown("<br>", unsafe_allow_dict=True)
+        predict_btn = st.button("🚀 Etkileşimi Tahmin Et", type="primary", use_container_width=True)
+
+    with sim_col2:
+        st.subheader("🎯 Tahmin Sonucu")
+        if predict_btn:
+            st.success(f"### Tahmini Etkileşim Skoru: `{estimated_score:.2f}`")
+            st.metric("Tahmini Başarı Oranı", f"%{estimated_score*100:.1f}")
+            
+            # Başarı Durum Bildirimi
+            if estimated_score >= 0.70:
+                st.balloons()
+                st.info("🔥 **Yüksek Performans:** Gönderilerin keşfete düşme ve viral olma olasılığı çok yüksek!")
+            elif estimated_score >= 0.40:
+                st.info("📊 **Ortalama Performans:** Standart ve kararlı bir etkileşim seviyesi bekleniyor.")
+            else:
+                st.warning("📉 **Düşük Performans:** İçerik stratejisini ve zamanlamayı gözden geçirmekte fayda var.")
+        else:
+            st.info("👈 Sol taraftaki parametreleri ayarlayıp **'Etkileşimi Tahmin Et'** butonuna basın.")
+
+# ==========================================
+# 6. ALT BİLGİ (FOOTER)
+# ==========================================
+st.markdown("---")
+st.caption("🤖 ML & BI Dashboard | Zaman Serisi & Duygu Analizi Entegrasyonu")
